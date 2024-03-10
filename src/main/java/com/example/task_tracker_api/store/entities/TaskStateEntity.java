@@ -7,7 +7,7 @@ import lombok.experimental.FieldDefaults;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
+import java.util.Optional;
 
 @Entity
 @Table(name = "task_state")
@@ -22,28 +22,32 @@ public class TaskStateEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE)
     Long id;
-    @Column(unique = true)
+
     String name;
+
     @Builder.Default
     Instant createdAt = Instant.now();
-    Long ordinal;
+
+    @OneToOne
+    TaskStateEntity leftTaskState;
+
+    @OneToOne
+    TaskStateEntity rightTaskState;
+
+    @ManyToOne
+    ProjectEntity project;
+
     @Builder.Default
     @OneToMany
     @JoinColumn(name = "task_state_id", referencedColumnName = "id")
     List<TaskEntity> tasks = new ArrayList<>();
 
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        TaskStateEntity that = (TaskStateEntity) o;
-        return Objects.equals(id, that.id)
-                && Objects.equals(name, that.name)
-                && Objects.equals(ordinal, that.ordinal);
+    public Optional<TaskStateEntity> getLeftTaskState() {
+        return Optional.ofNullable(leftTaskState);
     }
 
-    @Override
-    public int hashCode() {
-        return Objects.hash(id, name, ordinal);
+    public Optional<TaskStateEntity> getRightTaskState() {
+        return Optional.ofNullable(rightTaskState);
     }
+
 }
