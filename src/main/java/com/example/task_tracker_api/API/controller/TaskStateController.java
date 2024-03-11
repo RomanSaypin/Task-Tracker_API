@@ -1,9 +1,10 @@
 package com.example.task_tracker_api.API.controller;
 
 import com.example.task_tracker_api.API.controller.helper.ControllerHelper;
+import com.example.task_tracker_api.API.dto.AskDTO;
 import com.example.task_tracker_api.API.dto.TaskStateDTO;
 import com.example.task_tracker_api.API.exception.BadRequestException;
-import com.example.task_tracker_api.API.factories.TaskDtoFactory;
+import com.example.task_tracker_api.API.exception.NotFoundException;
 import com.example.task_tracker_api.API.factories.TaskStateDtoFactory;
 import com.example.task_tracker_api.store.entities.ProjectEntity;
 import com.example.task_tracker_api.store.entities.TaskStateEntity;
@@ -15,7 +16,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 
 @RequiredArgsConstructor
@@ -33,6 +33,10 @@ public class TaskStateController {
 
     public static final String GET_TASK_STATES = "/api/projects/{project_id}/task-states";
     public static final String CREATE_TASK_STATE = "/api/projects/{project_id}/task-states";
+    public static final String UPDATE_TASK_STATE = "/api/task-states/{task_state_id}";
+    public static final String CHANGE_TASK_STATE_POSITION = "/api/task-states/{task_state_id}/position/change";
+    public static final String DELETE_TASK_STATE = "/api/task-states/{task_state_id}";
+
 
 
 
@@ -95,5 +99,109 @@ public class TaskStateController {
         final TaskStateEntity savedTaskState = taskStateRepository.saveAndFlush(taskState);
 
         return taskStateDtoFactory.makeTaskStateDto(savedTaskState);
+    }
+
+    @PatchMapping(UPDATE_TASK_STATE)
+    public TaskStateDTO updateTaskState(
+            @PathVariable("task_state_id") Long taskStateId,
+            @RequestParam("task_state_name") String taskStateName) {
+
+        if (taskStateName.isBlank()) {
+            throw new BadRequestException("Task state name can't be empty");
+        }
+
+        TaskStateEntity taskState = getTaskStateOrThrowException(taskStateId);
+
+        taskStateRepository
+                .findTaskStateEntityByProjectIdAndNameContainsIgnoreCase(
+                        taskState.getProject().getId(),
+                        taskStateName
+                ).
+                filter(anotherTaskState -> !anotherTaskState.getId().equals(taskStateId)).
+                ifPresent(anotherTaskState -> {
+                    throw new BadRequestException(
+                            String.format("Task State \"%s\" already exists.", taskStateName));
+                });
+
+
+        taskState.setName(taskStateName);
+
+       taskState = taskStateRepository.saveAndFlush(taskState);
+
+        return taskStateDtoFactory.makeTaskStateDto(taskState);
+    }
+
+    @PatchMapping(CHANGE_TASK_STATE_POSITION)
+    public TaskStateDTO changeTaskStatePosition(
+            @PathVariable("task_state_id") Long taskStateId,
+            @RequestParam("task_state_name") String taskStateName) {
+
+        if (taskStateName.isBlank()) {
+            throw new BadRequestException("Task state name can't be empty");
+        }
+
+        TaskStateEntity taskState = getTaskStateOrThrowException(taskStateId);
+
+        taskStateRepository
+                .findTaskStateEntityByProjectIdAndNameContainsIgnoreCase(
+                        taskState.getProject().getId(),
+                        taskStateName
+                ).
+                filter(anotherTaskState -> !anotherTaskState.getId().equals(taskStateId)).
+                ifPresent(anotherTaskState -> {
+                    throw new BadRequestException(
+                            String.format("Task State \"%s\" already exists.", taskStateName));
+                });
+
+
+        taskState.setName(taskStateName);
+
+        taskState = taskStateRepository.saveAndFlush(taskState);
+
+        return taskStateDtoFactory.makeTaskStateDto(taskState);
+    }
+
+    @DeleteMapping(DELETE_TASK_STATE)
+    public AskDTO deleteTaskState(@PathVariable("task_state_id") Long taskStateId) {
+
+        TaskStateEntity changeTaskState = getTaskStateOrThrowException(taskStateId);
+
+        replaceOldTaskStatePosition(changeTaskState);
+
+        changeTaskState = taskStateRepository.saveAndFlush(changeTaskState);
+
+        taskStateRepository.delete(changeTaskState);
+
+        return AskDTO.makeDefault(true);
+    }
+
+    private void replaceOldTaskStatePosition(TaskStateEntity changeTaskState) {
+
+        Optional<TaskStateEntity> optionalOldLeftTaskState = changeTaskState.getLeftTaskState();
+        Optional<TaskStateEntity> optionalOldRightTaskState = changeTaskState.getRightTaskState();
+
+        optionalOldLeftTaskState
+                .ifPresent(it -> {
+                    it.setRightTaskState(optionalOldRightTaskState.orElse(null));
+
+                    taskStateRepository.saveAndFlush(it);
+                });
+
+        optionalOldRightTaskState
+                .ifPresent(it -> {
+                    it.setLeftTaskState(optionalOldLeftTaskState.orElse(null));
+
+                    taskStateRepository.saveAndFlush(it);
+                });
+    }
+
+
+    private TaskStateEntity getTaskStateOrThrowException(Long taskStateId) {
+        return taskStateRepository
+                .findById(taskStateId)
+                .orElseThrow(() ->
+                        new NotFoundException(
+                                String.format("Task status with %d not found", taskStateId))
+                );
     }
 }
