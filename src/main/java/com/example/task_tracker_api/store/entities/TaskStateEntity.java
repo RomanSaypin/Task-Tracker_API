@@ -39,7 +39,7 @@ public class TaskStateEntity {
 
     @Builder.Default
     @OneToMany
-    @JoinColumn(name = "task_state_id", referencedColumnName = "id")
+    @JoinColumn(name = "task_state_id")
     List<TaskEntity> tasks = new ArrayList<>();
 
     public Optional<TaskStateEntity> getLeftTaskState() {
